@@ -138,19 +138,22 @@ OK "Server-Verbindung erfolgreich!"
 SCHRITT 4 "Programm herunterladen"
 INFO "Lade OneCinema Automation herunter..."
 
-$zipUrl    = "https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/main.zip"
-$zipPfad   = "$env:TEMP\onecinema-automation.zip"
-$extPfad   = "$env:TEMP\onecinema-extract"
+# GitHub API URL (funktioniert zuverlässiger mit privaten Repos)
+$apiUrl  = "https://api.github.com/repos/$GITHUB_USER/$GITHUB_REPO/zipball/main"
+$zipPfad = "$env:TEMP\onecinema-automation.zip"
+$extPfad = "$env:TEMP\onecinema-extract"
 
 try {
-    $dlHeaders = @{
-        "Authorization" = "token $deployToken"
-        "User-Agent"    = "OneCinemaInstaller/2.0"
-    }
-    Invoke-WebRequest $zipUrl -Headers $dlHeaders -OutFile $zipPfad -UseBasicParsing
+    # WebClient überträgt Token auch bei Weiterleitungen (Invoke-WebRequest tut das nicht)
+    $wc = New-Object System.Net.WebClient
+    $wc.Headers.Add("Authorization", "token $deployToken")
+    $wc.Headers.Add("User-Agent", "OneCinemaInstaller/2.0")
+    $wc.Headers.Add("Accept", "application/vnd.github+json")
+    $wc.DownloadFile($apiUrl, $zipPfad)
     OK "Download abgeschlossen!"
 } catch {
     FEHLER "Download fehlgeschlagen: $_"
+    FEHLER "Bitte Internetverbindung prüfen und nochmal versuchen."
     Read-Host "`n  Enter drücken zum Beenden"
     exit 1
 }
