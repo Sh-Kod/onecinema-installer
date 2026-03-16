@@ -88,14 +88,13 @@ if ($python -eq "") {
         Read-Host "`n  Enter drücken zum Beenden"
         exit 1
     }
-    # PATH für diese Session aktualisieren
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
                 $env:Path
     Start-Sleep -Seconds 2
     $python = Finde-Python
     if ($python -eq "") {
-        FEHLER "Python wurde installiert aber nicht gefunden. Bitte PC neu starten und nochmal ausführen."
+        FEHLER "Python nicht gefunden nach Installation. Bitte PC neu starten und nochmal ausführen."
         Read-Host "`n  Enter drücken zum Beenden"
         exit 1
     }
@@ -111,15 +110,15 @@ INFO "Authentifizierung läuft..."
 
 $deployToken = ""
 try {
-    $headers = @{
+    $sbHeaders = @{
         "apikey"        = $SUPABASE_KEY
         "Authorization" = "Bearer $SUPABASE_KEY"
     }
     $result = Invoke-RestMethod `
         -Uri "$SUPABASE_URL/rest/v1/app_config?key=eq.github_deploy_token&select=value" `
-        -Headers $headers -TimeoutSec 10
+        -Headers $sbHeaders -TimeoutSec 10
     if ($result -and $result[0].value) {
-        $deployToken = $result[0].value
+        $deployToken = $result[0].value.Trim()
     }
 } catch {
     FEHLER "Verbindung zum OneCinema Server fehlgeschlagen: $_"
@@ -138,19 +137,37 @@ OK "Server-Verbindung erfolgreich!"
 SCHRITT 4 "Programm herunterladen"
 INFO "Lade OneCinema Automation herunter..."
 
-# GitHub API URL (funktioniert zuverlässiger mit privaten Repos)
 $apiUrl  = "https://api.github.com/repos/$GITHUB_USER/$GITHUB_REPO/zipball/main"
 $zipPfad = "$env:TEMP\onecinema-automation.zip"
 $extPfad = "$env:TEMP\onecinema-extract"
 
 try {
-    # WebClient überträgt Token auch bei Weiterleitungen (Invoke-WebRequest tut das nicht)
+    # Schritt A: GitHub API ohne Weiterleitung aufrufen → CDN-URL erhalten
+    $req = [System.Net.HttpWebRequest]::Create($apiUrl)
+    $req.Method = "GET"
+    $req.Headers.Add("Authorization", "token $deployToken")
+    $req.UserAgent = "OneCinemaInstaller/2.0"
+    $req.Accept = "application/vnd.github+json"
+    $req.AllowAutoRedirect = $false
+
+    $cdnUrl = ""
+    try {
+        $resp = $req.GetResponse()
+        $cdnUrl = $resp.Headers["Location"]
+        $resp.Close()
+    } catch [System.Net.WebException] {
+        $cdnUrl = $_.Exception.Response.Headers["Location"]
+        $_.Exception.Response.Close()
+    }
+
+    if (-not $cdnUrl) { throw "Keine CDN-URL von GitHub erhalten." }
+
+    # Schritt B: ZIP direkt von CDN laden (vorübergehende URL, kein Token nötig)
+    INFO "Lade Programmdateien..."
     $wc = New-Object System.Net.WebClient
-    $wc.Headers.Add("Authorization", "token $deployToken")
-    $wc.Headers.Add("User-Agent", "OneCinemaInstaller/2.0")
-    $wc.Headers.Add("Accept", "application/vnd.github+json")
-    $wc.DownloadFile($apiUrl, $zipPfad)
+    $wc.DownloadFile($cdnUrl, $zipPfad)
     OK "Download abgeschlossen!"
+
 } catch {
     FEHLER "Download fehlgeschlagen: $_"
     FEHLER "Bitte Internetverbindung prüfen und nochmal versuchen."
@@ -182,10 +199,17 @@ OK "Pakete installiert!"
 # ── Schritt 7: Setup-Wizard starten ──────────────────────────
 SCHRITT 7 "Setup-Assistent starten"
 
-$wizardPfad = "$extPfad\$GITHUB_REPO-main\src\setup_wizard.py"
+# Ordner-Name dynamisch finden (zipball hat anderen Namen als archive)
+$innerOrdner = Get-ChildItem $extPfad -Directory | Select-Object -First 1
+if (-not $innerOrdner) {
+    FEHLER "Entpackter Ordner nicht gefunden."
+    Read-Host "`n  Enter drücken zum Beenden"
+    exit 1
+}
+$wizardPfad = Join-Path $innerOrdner.FullName "src\setup_wizard.py"
 
 if (-not (Test-Path $wizardPfad)) {
-    FEHLER "Setup-Datei nicht gefunden. Bitte Administrator kontaktieren."
+    FEHLER "Setup-Datei nicht gefunden: $wizardPfad"
     Read-Host "`n  Enter drücken zum Beenden"
     exit 1
 }
