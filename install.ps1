@@ -192,9 +192,16 @@ try {
 
 # ── Schritt 6: Python-Pakete installieren ────────────────────
 SCHRITT 6 "Basis-Pakete installieren"
-INFO "Installiere benötigte Pakete (requests, keyring, openpyxl)..."
-& $python -m pip install requests keyring openpyxl tkinterdnd2 --quiet --upgrade 2>&1 | Out-Null
-OK "Pakete installiert!"
+INFO "Installiere benötigte Pakete..."
+
+$pakete = @("requests", "keyring", "openpyxl", "supabase", "python-telegram-bot")
+foreach ($paket in $pakete) {
+    INFO "Installiere $paket..."
+    $ErrorActionPreference = "Continue"
+    & $python -m pip install $paket --quiet --upgrade *>&1 | Out-Null
+    $ErrorActionPreference = "Stop"
+}
+OK "Alle Pakete installiert!"
 
 # ── Schritt 7: Setup-Wizard starten ──────────────────────────
 SCHRITT 7 "Setup-Assistent starten"
