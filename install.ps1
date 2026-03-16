@@ -194,7 +194,7 @@ try {
 SCHRITT 6 "Basis-Pakete installieren"
 INFO "Installiere benötigte Pakete..."
 
-$pakete = @("requests", "keyring", "openpyxl", "supabase", "python-telegram-bot")
+$pakete = @("requests", "keyring", "openpyxl", "supabase", "python-telegram-bot", "playwright", "tkinterdnd2")
 foreach ($paket in $pakete) {
     INFO "Installiere $paket..."
     $ErrorActionPreference = "Continue"
@@ -202,6 +202,14 @@ foreach ($paket in $pakete) {
     $ErrorActionPreference = "Stop"
 }
 OK "Alle Pakete installiert!"
+
+# ── Schritt 6b: Chromium Browser installieren ────────────────
+SCHRITT "6b" "Chromium Browser installieren"
+INFO "Lade Chromium Browser herunter (ca. 150 MB, bitte warten)..."
+$ErrorActionPreference = "Continue"
+& $python -m playwright install chromium 2>&1 | ForEach-Object { INFO $_ }
+$ErrorActionPreference = "Stop"
+OK "Chromium Browser installiert!"
 
 # ── Schritt 7: Setup-Wizard starten ──────────────────────────
 SCHRITT 7 "Setup-Assistent starten"
