@@ -79,24 +79,44 @@ New-Item -ItemType Directory -Path $TEMP_DIR | Out-Null
 $setupPfad = Join-Path $TEMP_DIR $SETUP_EXE
 $mainPfad  = Join-Path $TEMP_DIR $MAIN_EXE
 
+# ── TLS alle Versionen aktivieren (behebt Verbindungsfehler auf aelteren Windows) ─
+[Net.ServicePointManager]::SecurityProtocol = `
+    [Net.SecurityProtocolType]::Tls12 -bor `
+    [Net.SecurityProtocolType]::Tls11 -bor `
+    [Net.SecurityProtocolType]::Tls
+
 # ── Download-Hilfsfunktion (folgt Redirects, funktioniert mit GitHub CDN) ────
 function Download-Datei($url, $ziel, $bezeichnung) {
-    # Methode 1: WebClient (folgt Redirects zuverlaessig)
+    # Methode 1: curl.exe (in Windows 10/11 eingebaut, sehr zuverlaessig)
+    $curlExe = "$env:SystemRoot\System32\curl.exe"
+    if (Test-Path $curlExe) {
+        try {
+            & $curlExe -L --silent --show-error -o $ziel $url 2>&1 | Out-Null
+            if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
+        } catch { }
+    }
+
+    # Methode 2: WebClient
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add("User-Agent", "OneCinemaInstaller/2.2")
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         $wc.DownloadFile($url, $ziel)
         if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
     } catch { }
 
-    # Methode 2: Invoke-WebRequest mit MaximumRedirection
+    # Methode 3: Invoke-WebRequest
     try {
         Invoke-WebRequest -Uri $url -OutFile $ziel -UseBasicParsing -MaximumRedirection 10
         if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
     } catch { }
 
-    # Methode 3: BitsTransfer (Windows Background Transfer)
+    # Methode 4: certutil (auf allen Windows-Versionen verfuegbar)
+    try {
+        $null = & certutil.exe -urlcache -split -f $url $ziel 2>&1
+        if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
+    } catch { }
+
+    # Methode 5: BitsTransfer
     try {
         Import-Module BitsTransfer -ErrorAction SilentlyContinue
         Start-BitsTransfer -Source $url -Destination $ziel -ErrorAction Stop
