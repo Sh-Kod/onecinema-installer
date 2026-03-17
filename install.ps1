@@ -79,27 +79,47 @@ New-Item -ItemType Directory -Path $TEMP_DIR | Out-Null
 $setupPfad = Join-Path $TEMP_DIR $SETUP_EXE
 $mainPfad  = Join-Path $TEMP_DIR $MAIN_EXE
 
-# ── Schritt 4: Setup-EXE herunterladen ───────────────────────────────────────
-INFO "Lade Setup-Assistent herunter..."
-try {
-    Invoke-WebRequest -Uri $setupUrl -OutFile $setupPfad -UseBasicParsing
-} catch {
-    FEHLER "Download fehlgeschlagen: $($_.Exception.Message)`n`nBitte manuell herunterladen:`nhttps://github.com/$GITHUB_USER/$GITHUB_REPO/releases"
+# ── Download-Hilfsfunktion (folgt Redirects, funktioniert mit GitHub CDN) ────
+function Download-Datei($url, $ziel, $bezeichnung) {
+    # Methode 1: WebClient (folgt Redirects zuverlaessig)
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "OneCinemaInstaller/2.2")
+        $wc.DownloadFile($url, $ziel)
+        if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
+    } catch { }
+
+    # Methode 2: Invoke-WebRequest mit MaximumRedirection
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $ziel -UseBasicParsing -MaximumRedirection 10
+        if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
+    } catch { }
+
+    # Methode 3: BitsTransfer (Windows Background Transfer)
+    try {
+        Import-Module BitsTransfer -ErrorAction SilentlyContinue
+        Start-BitsTransfer -Source $url -Destination $ziel -ErrorAction Stop
+        if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
+    } catch { }
+
+    return $false
 }
 
-if (-not (Test-Path $setupPfad) -or (Get-Item $setupPfad).Length -lt 1MB) {
-    FEHLER "Setup-Datei konnte nicht heruntergeladen werden oder ist zu klein."
+# ── Schritt 4: Setup-EXE herunterladen ───────────────────────────────────────
+INFO "Lade Setup-Assistent herunter... (bitte warten, ca. 20-60 Sek.)"
+$ok = Download-Datei $setupUrl $setupPfad "Setup-Assistent"
+if (-not $ok) {
+    FEHLER "Download fehlgeschlagen.`n`nBitte manuell herunterladen:`nhttps://github.com/$GITHUB_USER/$GITHUB_REPO/releases"
 }
 $sz = [math]::Round((Get-Item $setupPfad).Length / 1MB, 1)
 OK "Setup-Assistent: $sz MB"
 
 # ── Schritt 5: Hauptprogramm herunterladen ────────────────────────────────────
-INFO "Lade Hauptprogramm herunter..."
-try {
-    Invoke-WebRequest -Uri $mainUrl -OutFile $mainPfad -UseBasicParsing
-} catch {
-    WARN "Hauptprogramm-Download fehlgeschlagen: $($_.Exception.Message)"
-    WARN "Setup wird trotzdem gestartet - Hauptprogramm kann spaeter nachgeladen werden."
+INFO "Lade Hauptprogramm herunter... (bitte warten, ca. 20-60 Sek.)"
+$ok = Download-Datei $mainUrl $mainPfad "Hauptprogramm"
+if (-not $ok) {
+    WARN "Hauptprogramm-Download fehlgeschlagen - Setup wird trotzdem gestartet."
 }
 
 if (Test-Path $mainPfad) {
