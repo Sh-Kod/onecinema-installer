@@ -13,10 +13,11 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"
 
-$GITHUB_USER = "Sh-Kod"
-$GITHUB_REPO = "onecinema-automation"
-$SETUP_EXE   = "AutomationCinema_Setup.exe"
-$MAIN_EXE    = "OneCinema.exe"
+$GITHUB_USER         = "Sh-Kod"
+$GITHUB_REPO         = "onecinema-automation"   # privates Repo (Quellcode)
+$GITHUB_RELEASE_REPO = "onecinema-installer"    # oeffentliches Repo (EXE-Downloads)
+$SETUP_EXE           = "AutomationCinema_Setup.exe"
+$MAIN_EXE            = "OneCinema.exe"
 $TEMP_DIR    = Join-Path $env:TEMP "OneCinema_Install"
 
 # ── Ausgabe-Hilfsfunktionen ───────────────────────────────────────────────────
@@ -52,7 +53,7 @@ $mainUrl  = ""
 $tag      = "unbekannt"
 
 try {
-    $apiUrl  = "https://api.github.com/repos/$GITHUB_USER/$GITHUB_REPO/releases/latest"
+    $apiUrl  = "https://api.github.com/repos/$GITHUB_USER/$GITHUB_RELEASE_REPO/releases/latest"
     $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing
     $tag     = $release.tag_name
 
@@ -60,16 +61,16 @@ try {
     $assetMain  = $release.assets | Where-Object { $_.name -eq $MAIN_EXE  } | Select-Object -First 1
 
     $setupUrl = if ($assetSetup) { $assetSetup.browser_download_url } else {
-        "https://github.com/$GITHUB_USER/$GITHUB_REPO/releases/latest/download/$SETUP_EXE"
+        "https://github.com/$GITHUB_USER/$GITHUB_RELEASE_REPO/releases/latest/download/$SETUP_EXE"
     }
     $mainUrl = if ($assetMain) { $assetMain.browser_download_url } else {
-        "https://github.com/$GITHUB_USER/$GITHUB_REPO/releases/latest/download/$MAIN_EXE"
+        "https://github.com/$GITHUB_USER/$GITHUB_RELEASE_REPO/releases/latest/download/$MAIN_EXE"
     }
     OK "Version gefunden: $tag"
 } catch {
     WARN "GitHub API nicht erreichbar - verwende Standard-URLs..."
-    $setupUrl = "https://github.com/$GITHUB_USER/$GITHUB_REPO/releases/latest/download/$SETUP_EXE"
-    $mainUrl  = "https://github.com/$GITHUB_USER/$GITHUB_REPO/releases/latest/download/$MAIN_EXE"
+    $setupUrl = "https://github.com/$GITHUB_USER/$GITHUB_RELEASE_REPO/releases/latest/download/$SETUP_EXE"
+    $mainUrl  = "https://github.com/$GITHUB_USER/$GITHUB_RELEASE_REPO/releases/latest/download/$MAIN_EXE"
 }
 
 # ── Schritt 3: Temp-Ordner vorbereiten ────────────────────────────────────────
