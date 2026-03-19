@@ -67,8 +67,8 @@ function Download-Datei {
 
     # Methode 1: curl.exe
     try {
-        $curlPath = (Get-Command curl.exe -ErrorAction SilentlyContinue)?.Source
-        if ($curlPath) {
+        $curlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue
+        if ($curlCmd) {
             & curl.exe -L -o $ziel $url --silent --show-error --max-time 120
             if ((Test-Path $ziel) -and (Get-Item $ziel).Length -gt 100KB) { return $true }
         }
